@@ -22,12 +22,26 @@ Private Sub DoElaborateAlphanumSlug()
     If Len(Nz(Me!slug)) > 0 Then
         Dim sRegUnit As String
         Dim sUnitCo As String
-        Let sRegUnit = RegexReplace(Value:=Nz(Me!REGUNIT.Value), Pattern:="\s+Reg([.]|iment)?", Replace:="")
+        Dim cUnitCo As New Collection
+        Dim sBit As String
         
-        Let sUnitCo = RegexReplace(Value:=Trim(LCase(sRegUnit)), Pattern:="[^A-Za-z0-9]+", Replace:="-")
-        Let sUnitCo = sUnitCo & "-" & RegexReplace(Value:=Trim(LCase(Nz(Me!BRANCH.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
-        Let sUnitCo = sUnitCo & "-co-" & RegexReplace(Value:=Trim(LCase(Nz(Me!COMUNIT.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
-        Let Me!slug.Value = Me!slug.Value & "-" & sUnitCo
+        cUnitCo.Add Me!slug.Value
+        
+        Let sRegUnit = RegexReplace(Value:=Nz(Me!REGUNIT.Value), Pattern:="\s+Reg([.]|iment)?", Replace:="")
+        Let sBit = RegexReplace(Value:=Trim(LCase(sRegUnit)), Pattern:="[^A-Za-z0-9]+", Replace:="-")
+        If Len(sBit) > 0 Then cUnitCo.Add sBit
+        
+        Let sBit = RegexReplace(Value:=Trim(LCase(Nz(Me!BRANCH.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
+        If Len(sBit) > 0 Then cUnitCo.Add sBit
+        
+        Let sBit = RegexReplace(Value:=Trim(LCase(Nz(Me!COMUNIT.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
+        If Len(sBit) > 0 Then cUnitCo.Add "co-" & sBit
+        
+        Let sUnitCo = Join("-", List:=cUnitCo)
+        Let Me!slug.Value = sUnitCo
+        
+        Set cUnitCo = Null
+        
     End If
     
 End Sub
