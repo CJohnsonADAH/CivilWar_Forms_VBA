@@ -10,6 +10,40 @@ Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
+Private iPreviousRecord As Long
+Private sPreviousName As String
+Private sPreviousUnit As String
+Private bPreviouslyFlagged As Boolean
+
+Private Property Get CRLF() As String
+    Let CRLF = Chr$(13) & Chr$(10)
+End Property
+
+Private Property Get PreviousRecord() As Long
+    Let PreviousRecord = iPreviousRecord
+End Property
+Private Property Let PreviousRecord(RHS As Long)
+    Let iPreviousRecord = RHS
+End Property
+Private Property Get PreviousName() As String
+    Let PreviousName = sPreviousName
+End Property
+Private Property Let PreviousName(RHS As String)
+    Let sPreviousName = RHS
+End Property
+Private Property Get PreviousUnit() As String
+    Let PreviousUnit = sPreviousUnit
+End Property
+Private Property Let PreviousUnit(RHS As String)
+    Let sPreviousUnit = RHS
+End Property
+Private Property Get PreviouslyFlagged() As Boolean
+    Let PreviouslyFlagged = bPreviouslyFlagged
+End Property
+Private Property Let PreviouslyFlagged(RHS As Boolean)
+    Let bPreviouslyFlagged = RHS
+End Property
+
 Private Function EngagementsBreaker() As String
     Let EngagementsBreaker = "^(Killed|Ab|C(apt|[.])|Pr(es|[.:\s])|Sev)"
 End Function
@@ -19,7 +53,7 @@ Private Sub AUTH_DblClick(Cancel As Integer)
     Dim sAuthRegex As String
         
     Let sAuth = Me!AUTH.Value
-    Let sAuthRegex = "Authority cont[.]|Auth(or(ity)?)?(\s+con[']t)?[:.]?\s*"
+    Let sAuthRegex = AuthorityContdRegex
     
     DoConsiderForJoining Text:=sAuth, Field:=Me!ENGAGE2, PrefixPattern:=sAuthRegex
     DoConsiderForJoining Text:=sAuth, Field:=Me!REMARKS, PrefixPattern:=sAuthRegex
@@ -66,14 +100,14 @@ Private Sub DoPrepEngageToRemarks()
     Let sEngage = RegexReplace(Me!ENGAGE.Value, "^Remarks:\s+", "")
     If Len(Nz(Me!ENGAGE2.Value)) > 0 Then
         Let sEngage2 = Nz(Me!ENGAGE2.Value)
-        Let sEngage2 = RegexReplace(sEngage2, "^Remarks( con[']t)?[:]\s*", "")
+        Let sEngage2 = RegexReplace(sEngage2, "^[(]?Remarks( con[']?t)?[:)]?\s*", "")
             
         Let sEngage = FieldsJoined(sEngage, sEngage2)
         Let Me!ENGAGE2.Value = Null
         HighlightField Field:=Me!ENGAGE2
     End If
         
-    Let Me!REMARKS.Value = RegexReplace(Me!REMARKS.Value, "^(Con[']t)[:]", "")
+    Let Me!REMARKS.Value = RegexReplace(Me!REMARKS.Value, "^[(]?(Con[']?t)[)]?[:]", "")
     
     Let Me!ENGAGE.Value = sEngage
     
@@ -96,6 +130,16 @@ Private Sub cmdEngageToRemarksBack_Click()
     
     Let Me!ENGAGE.Value = Null
     HighlightField Field:=Me!ENGAGE
+    
+End Sub
+
+Private Sub cmdFilterNullSlug_Click()
+    If Me.FilterOn Then
+        Let Me.FilterOn = False
+    Else
+        Let Me.Filter = "Len(Nz([slug])) = 0 AND Len(Nz(REGUNIT)) > 0"
+        Let Me.FilterOn = True
+    End If
     
 End Sub
 
@@ -220,25 +264,36 @@ Private Sub DoElaborateAlphanumSlug()
     If Len(Nz(Me!slug)) > 0 Then
         Dim sRegUnit As String
         Dim sUnitCo As String
-        Dim iLenRegBranchCo As Integer
+        Dim cUnitCo As New Collection
+        Dim sBit As String
+        
+        cUnitCo.Add Me!slug.Value
         
         Let sRegUnit = RegexReplace(Value:=Nz(Me!REGUNIT.Value), Pattern:="\s+Reg([.]|iment)?", Replace:="")
-        Let iLenRegBranchCo = Len(Nz(Me!REGUNIT.Value))
+        Let sBit = RegexReplace(Value:=Trim(LCase(sRegUnit)), Pattern:="[^A-Za-z0-9]+", Replace:="-")
+        If Len(sBit) > 0 Then cUnitCo.Add sBit
         
-        Let sUnitCo = RegexReplace(Value:=Trim(LCase(sRegUnit)), Pattern:="[^A-Za-z0-9]+", Replace:="-")
-        Let sUnitCo = sUnitCo & "-" & RegexReplace(Value:=Trim(LCase(Nz(Me!BRANCH.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
-        Let iLenRegBranchCo = iLenRegBranchCo + Len(Nz(Me!BRANCH.Value))
+        Let sBit = RegexReplace(Value:=Trim(LCase(Nz(Me!BRANCH.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
+        If Len(sBit) > 0 Then cUnitCo.Add sBit
         
-        If Len(Nz(Me!COMUNIT.Value)) > 0 Then
-            Let sUnitCo = sUnitCo & "-co-" & RegexReplace(Value:=Trim(LCase(Nz(Me!COMUNIT.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
-            Let iLenRegBranchCo = iLenRegBranchCo + Len(Nz(Me!COMUNIT.Value))
+        Let sBit = RegexReplace(Value:=Trim(LCase(Nz(Me!COMUNIT.Value))), Pattern:="[^A-Za-z0-9]+", Replace:="-")
+        If Len(sBit) > 0 Then cUnitCo.Add "co-" & sBit
+        
+        If cUnitCo.Count <= 1 Then
+            Let sUnitCo = GetAuthoritySlug(Text:=Nz(Me!AUTH.Value))
+            If Len(sUnitCo) > 0 Then
+                cUnitCo.Add sUnitCo
+            End If
         End If
         
-        If iLenRegBranchCo > 0 Then
-            Let Me!slug.Value = Me!slug.Value & "-" & sUnitCo
-        Else
-            Let Me!slug.Value = Me!slug.Value & "-" & VBA.FORMAT$(Me!recnumber.Value, "0")
+        If cUnitCo.Count <= 1 Then
+            cUnitCo.Add VBA.Format$(Me!recnumber.Value, "0")
         End If
+        
+        Let sUnitCo = Join("-", List:=cUnitCo)
+        Let Me!slug.Value = sUnitCo
+        
+        'Set cUnitCo = Null
         
     End If
     
@@ -278,7 +333,9 @@ Private Sub Form_BeforeUpdate(Cancel As Integer)
         Let oHistory.IDName = "recnumber"
 
         Set Rs = Me.RecordsetClone
+        On Error GoTo PauseForASec
         oHistory.DoStoreRevision ID:=Me!recnumber.Value, Rs:=Rs
+        On Error GoTo 0
         Set Rs = Nothing
         
         Let Me!RevisedTimestamp.Locked = False
@@ -296,16 +353,71 @@ Private Sub Form_BeforeUpdate(Cancel As Integer)
     End If
     Exit Sub
     
+PauseForASec:
+    If Err.Number = 3027 Then
+        Debug.Print "Got an ERROR: ", Err.Number, Err.Description, "... try again in a sec."
+    
+        Dim I As Integer
+        Dim N As Integer
+        Let N = 255
+        For I = 0 To (N - 1)
+            Let Me!recnumber.BackColor = RGB(255, 255 * (I / N), 255 * (I / N))
+            DoEvents
+        Next I
+        Let Me!recnumber.BackColor = RGB(255, 255, 255)
+    
+        oHistory.DoStoreRevision ID:=Me!recnumber.Value, Rs:=Rs
+        Resume Next
+    End If
+    
 End Sub
 
 Private Sub Form_Current()
+    Dim sCurName As String
+    Dim sPrevSlug As String
+    Dim sCurSlug As String
+    Dim sCurUnit As String
+    
+    Dim bHighlightNames As Boolean
+    
+    Let Me!txtRemarksCandidates.Value = Null
+    Let Me!txtRemarksCandidatesNo.Value = Null
+
+    Let sCurName = Me!FNAME.Value & " " & Me!MI.Value & " " & Me!LNAME.Value
+    Let sCurUnit = Me!BRANCH.Value & " " & Me!REGUNIT.Value & " Co. " & Me!COMUNIT.Value & " (" & Me!COMUNITNA.Value & ")"
+    
+    Let sCurSlug = RegexReplace(Pattern:="(^[^a-z0-9]+|[^a-z0-9]+$)", Value:=LCase(Trim(sCurName)), Replace:="")
+    Let sCurSlug = RegexReplace(Pattern:="[^a-z0-9]+", Value:=sCurSlug, Replace:="-")
+    Let sPrevSlug = RegexReplace(Pattern:="(^[^a-z0-9]+|[^a-z0-9]+$)", Value:=LCase(Trim(PreviousName)), Replace:="")
+    Let sPrevSlug = RegexReplace(Pattern:="[^a-z0-9]+", Value:=sPrevSlug, Replace:="-")
+    
+    Dim TestHighlight As Boolean
+    
+    Let TestHighlight = False
+    Debug.Print "Previous Name:", PreviousName & " (" & sPrevSlug & ")", "Current Name:", sCurName & " (" & sCurSlug & ")"
+    
+    If TestHighlight Or ((sPrevSlug = sCurSlug) And (PreviousRecord <> Me!recnumber.Value)) Then
+        Let bHighlightNames = True
+        If Not PreviouslyFlagged Or (Len(Nz(Me!alias_recnumber.Value)) = 0) Then
+            Dim iResponse As Long
+            Let iResponse = MsgBox("Possible duplicate record:" & CRLF & PreviousName & CRLF & sCurName & CRLF & PreviousUnit & CRLF & sCurUnit & CRLF & "Fill in alias?", Buttons:=vbYesNo)
+            If (iResponse = vbYes) Then
+                Let Me!alias_recnumber.Value = VBA.Format$(PreviousRecord, "0")
+            End If
+        End If
+        Let PreviouslyFlagged = True
+    
+    Else
+        Let PreviouslyFlagged = False
+    End If
+    
+    Let PreviousName = sCurName
+    Let PreviousUnit = sCurUnit
+    Let PreviousRecord = Nz(Me!recnumber.Value)
+    
     Let Me!RevisedTimestamp.Locked = True
     Let Me!RevisedBy.Locked = True
     
-    Let Me!ENGAGE2.Visible = (Len(Nz(Me!ENGAGE2.Value)) > 0)
-    Let Me!cmdEngage2ToRemarks.Visible = Me!ENGAGE2.Visible
-    Let Me!ENGAGE2.Height = IIf(Me!ENGAGE2.Visible, 810, 10)
-    Let Me!cmdEngage2ToRemarks.Height = IIf(Me!cmdEngage2ToRemarks.Visible, 810, 10)
     Let Me!REMARKS2.Visible = (Len(Nz(Me!REMARKS2.Value)) > 0)
     Let Me!REMARKS2.Height = IIf(Me!REMARKS2.Visible, 810, 10)
 
@@ -313,8 +425,21 @@ Private Sub Form_Current()
     If Len(Nz(Me!slug.Value)) = 0 Then
         DoFillInSlug
     End If
-
+    
+    If TypeName(Me!REMARKS2.Value) = "String" Then
+        If ShouldProcessREMARKS2 Then
+            DoProcessREMARKS2
+        End If
+    End If
+    
+    If bHighlightNames Then
+        HighlightField Field:=Me!FNAME
+        HighlightField Field:=Me!LNAME
+        HighlightField Field:=Me!MI
+        HighlightField Field:=Me!alias_recnumber
+    End If
 End Sub
+
 
 Private Sub Label30_DblClick(Cancel As Integer)
     Let Me.Filter = "Len(Nz([ENGAGE2])) > 0"
@@ -329,8 +454,47 @@ Private Sub lblRemarks_DblClick(Cancel As Integer)
     Let Me.FilterOn = Not Me.FilterOn
 End Sub
 
+Private Sub LNAME_DblClick(Cancel As Integer)
+    Dim RecordNumber As String
+    
+    If HasRecordNumber(Nz(Me!LNAME.Value)) Then
+        Let RecordNumber = GetRecordNumber(Field:=Nz(Me!LNAME.Value))
+        Let LNAME.Value = StripRecordNumber(Field:=Nz(Me!LNAME.Value))
+        
+        If Len(RecordNumber) > 0 Then
+            Let RecordNumber = "(Record " & RecordNumber & ".)"
+            Let Me!OTHERINFO.Value = RecordNumber & Chr$(13) & Chr$(10) & Nz(Me!OTHERINFO.Value)
+            
+            HighlightField Field:=Me!LNAME
+            HighlightField Field:=Me!OTHERINFO
+        End If
+        
+    End If
+    
+End Sub
+
 Private Sub REMARKS_DblClick(Cancel As Integer)
     DoProcessREMARKS_Field
+End Sub
+
+Private Sub DoCycleREMARKSCandidates()
+    Dim aCandidates() As String
+    Dim I As Long
+    Dim Range As Long
+    
+    If Len(Nz(Me!txtRemarksCandidates.Value)) > 0 Then
+        Let aCandidates = RegexSplit(Text:=Nz(Me!txtRemarksCandidates.Value), Pattern:=CRLF & "--- " & CRLF)
+        Let I = CInt(Nz(Me!txtRemarksCandidatesNo.Value))
+        Let Range = (UBound(aCandidates) - LBound(aCandidates)) + 1
+    
+        Let I = (I Mod Range)
+    
+        Let Me!REMARKS.Value = aCandidates(I)
+        HighlightField Field:=Me!REMARKS
+    
+        Let Me!txtRemarksCandidatesNo.Value = VBA.Format$(I + 1, "0")
+    End If
+    
 End Sub
 
 Private Sub DoProcessREMARKS_Field()
@@ -340,10 +504,16 @@ Private Sub DoProcessREMARKS_Field()
     Dim sRemarks As String
     Let sRemarks = Nz(Me!REMARKS.Value)
     
-    If Len(Nz(Me!REMARKS2.Value)) > 0 Then
-        Let Me!REMARKS.Value = FieldsJoined(Nz(Me!REMARKS.Value), Nz(Me!REMARKS2.Value))
-        Let Me!REMARKS2.Value = ""
-        HighlightField Field:=Me!REMARKS2
+    If Len(Nz(Me!txtRemarksCandidates.Value)) > 0 Then
+        DoCycleREMARKSCandidates
+        Exit Sub
+    End If
+    
+    DoConsiderForJoining Text:=sRemarks, Field:=Me!REMARKS2, PrefixPattern:="(R+emarks\s*" & ContdRegex & ")?", Alternatives:=Me!txtRemarksCandidates
+    Let Me!txtRemarksCandidatesNo.Value = "1"
+    
+    If sRemarks <> Nz(Me!REMARKS.Value) Then
+        Let Me!REMARKS.Value = sRemarks
     End If
     
     If Len(Nz(Me!ENGAGE2.Value)) > 0 Then
@@ -365,17 +535,22 @@ Private Sub DoProcessREMARKS_Field()
     
 End Sub
 
-Private Sub REMARKS2_BeforeUpdate(Cancel As Integer)
+Public Function ShouldProcessREMARKS2() As Boolean
+    Let ShouldProcessREMARKS2 = ( _
+        RegexMatch(Value:=Me!REMARKS2.Value, Pattern:=AuthorityAutoProcessRegex) _
+        Or (Nz(Me!AUTH.Value) Like "*Remarks con't*" _
+        Or Nz(Me!AUTH.Value) Like "*See Remarks cont'd*" _
+        Or Nz(Me!REMARKS2.Value) Like "* Authority sources* have * information.") _
+    )
+End Function
 
-End Sub
-
-Private Sub REMARKS2_DblClick(Cancel As Integer)
+Public Sub DoProcessREMARKS2()
     Dim sOTHERINFO As String
     Dim sOTHERINFO_Original As String
     
     Dim sAUTHORITY As String
     Dim sAUTHORITY_Original As String
-    
+
     Let sOTHERINFO = Nz(Me!OTHERINFO.Value)
     Let sOTHERINFO_Original = sOTHERINFO
     DoConsiderForJoining Text:=sOTHERINFO, Field:=Me!REMARKS2, PrefixPattern:="Witnesses:"
@@ -383,14 +558,96 @@ Private Sub REMARKS2_DblClick(Cancel As Integer)
         Let Me!OTHERINFO.Value = "Witnesses: " & sOTHERINFO
     End If
     
+    Let sOTHERINFO = Nz(Me!OTHERINFO.Value)
+    Let sOTHERINFO_Original = sOTHERINFO
+    DoConsiderForJoining Text:=sOTHERINFO, Field:=Me!REMARKS2, PrefixPattern:="Pension\b"
+    If sOTHERINFO <> sOTHERINFO_Original Then
+        Let Me!OTHERINFO.Value = "Pension" & sOTHERINFO
+    End If
+    
+    Let sOTHERINFO = Nz(Me!OTHERINFO.Value)
+    Let sOTHERINFO_Original = sOTHERINFO
+    DoConsiderForJoining Text:=sOTHERINFO, Field:=Me!REMARKS2, PrefixPattern:="Address\b"
+    If sOTHERINFO <> sOTHERINFO_Original Then
+        Let Me!OTHERINFO.Value = "Address" & sOTHERINFO
+    End If
+    
+    Let sOTHERINFO = Nz(Me!OTHERINFO.Value)
+    Let sOTHERINFO_Original = sOTHERINFO
+    DoConsiderForJoining Text:=sOTHERINFO, Field:=Me!REMARKS2, PrefixPattern:="Residence\b"
+    If sOTHERINFO <> sOTHERINFO_Original Then
+        Let Me!OTHERINFO.Value = "Residence" & sOTHERINFO
+    End If
+    
     Let sAUTHORITY = Nz(Me!AUTH.Value)
     Let sAUTHORITY_Original = sAUTHORITY
-    DoConsiderForJoining Text:=sAUTHORITY, Field:=Me!REMARKS2, PrefixPattern:="Auth(ority)?\s*con[']?t([']?d)?[.]?[:]?"
+    If sAUTHORITY Like "*Remarks con't*" Or sAUTHORITY Like "*See Remarks cont'd*" Then
+        Let sAUTHORITY = Replace(Expression:=sAUTHORITY, Find:="See Remarks con't to allow for space needed:", Replace:="")
+        Let sAUTHORITY = Replace(Expression:=sAUTHORITY, Find:="(See Remarks cont'd)", Replace:="")
+    End If
+    
+    Dim sSeeRemarksRegex As String
+    Let sSeeRemarksRegex = "(" & _
+        "\s*[^A-Z0-9a-z]+(see\s*)?remark[s]?\s*con[']?[dt][^A-Z0-9a-z]*\s*" & _
+        "|" & _
+        "[^A-Za-z0-9]con[']?t[.]? in Re?ma?r?ks?[^A-Za-z0-9]" & _
+        ")$"
+    If RegexMatch(Value:=sAUTHORITY, Pattern:=sSeeRemarksRegex) Then
+        Let sAUTHORITY = RegexReplace(Value:=sAUTHORITY, Pattern:=sSeeRemarksRegex, Replace:="")
+    End If
+    
+    Dim vRemarksParts
+    If RegexMatch(Value:=Nz(Me!REMARKS2.Value), Pattern:=AuthoritySplitRegex) Then
+        Let vRemarksParts = RegexSplit(Text:=Nz(Me!REMARKS2.Value), Pattern:=AuthoritySplitRegex)
+        
+        Dim S0 As String, SN As String
+        Dim i_0 As Long, i_N As Long
+        Let i_0 = LBound(vRemarksParts)
+        Let i_N = UBound(vRemarksParts)
+        If i_N >= i_0 Then
+            Let SN = vRemarksParts(i_N)
+            Let S0 = vRemarksParts(i_0)
+            
+            Let sAUTHORITY = FieldsJoined(Text1:=sAUTHORITY, Text2:=SN)
+            
+            Let Me!REMARKS2.Value = S0
+            Let Me!REMARKS.Value = FieldsJoined(Text1:=Nz(Me!REMARKS.Value), Text2:=Nz(Me!REMARKS2.Value))
+            Let Me!REMARKS2.Value = ""
+            
+            HighlightField Field:=Me!REMARKS
+            HighlightField Field:=Me!REMARKS2
+            HighlightField Field:=Me!AUTH
+            
+        End If
+    
+    End If
+    
+    DoConsiderForJoining Text:=sAUTHORITY, Field:=Me!REMARKS2, PrefixPattern:=AuthorityPrefixRegex
     If sAUTHORITY <> sAUTHORITY_Original Then
         Let Me!AUTH.Value = sAUTHORITY
         HighlightField Field:=Me!AUTH
     End If
+End Sub
+
+Private Sub REMARKS_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    Dim iLeftButton As Long
+    Dim iMidButton As Long
+    Dim bitShift As Long
     
+    Let iLeftButton = 1
+    Let iMidButton = 4
+    Let bitShift = 1
+    
+    Debug.Print "Button=", Button, "Shift=", Shift
+    If Button = iLeftButton And (Shift And bitShift) Then
+        DoCycleREMARKSCandidates
+    ElseIf Button = iMidButton Then
+        DoCmd.GoToRecord Record:=acNext
+    End If
+End Sub
+
+Private Sub REMARKS2_DblClick(Cancel As Integer)
+    DoProcessREMARKS2
 End Sub
 
 Private Sub slug_DblClick(Cancel As Integer)
@@ -406,16 +663,23 @@ Private Sub DoFillInSlug()
     Dim Controls As New Collection
     Dim Elements As New Collection
     
-    Controls.Add Item:=Me!LNAME
-    Controls.Add Item:=Me.FNAME
-    Controls.Add Item:=Me.MI
-        
+    If RegexMatch(Me!LNAME.Value, "^Slave") Then
+        Controls.Add Item:=Me!FNAME
+        Controls.Add Item:=Me!MI
+        Controls.Add Item:=Me!LNAME
+    Else
+        Controls.Add Item:=Me!LNAME
+        Controls.Add Item:=Me!FNAME
+        Controls.Add Item:=Me!MI
+    End If
+    
     For Each Control In Controls
         Dim I As Long
         Dim ControlWords() As String
         Dim ControlText As String
         
-        Let ControlWords = RegexSplit(Text:=Nz(Control.Value), Pattern:="[^A-Z0-9]+")
+        Let ControlText = FilterName(Nz(Control.Value))
+        Let ControlWords = RegexSplit(Text:=ControlText, Pattern:="[^A-Z0-9]+")
         For I = LBound(ControlWords) To UBound(ControlWords)
             Let ControlText = Trim(LCase(ControlWords(I)))
             If Len(ControlText) > 0 Then
@@ -431,6 +695,11 @@ Private Sub DoFillInSlug()
     
     Set Elements = Nothing
     Set Controls = Nothing
+    
+    If Len(Nz(Me!REGUNIT.Value)) > 0 Then
+        DoElaborateAlphanumSlug
+    End If
+    
 End Sub
 
 Private Sub DoResetHighlightedFields()

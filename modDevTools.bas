@@ -329,7 +329,7 @@ Public Sub ExportCodeToBackupSubdirectory(Component As Variant, SourcePath As St
     End If
     
     '2. --- Next, make sure that the transients/short-term backups directory includes a subdirectory for to-day.
-    Let RecoveryUniqId = FORMAT(Now, "YYYYmmdd")
+    Let RecoveryUniqId = Format(Now, "YYYYmmdd")
     Let RecoveryPath = RecoveryPath & "\" & RecoveryUniqId
     If Not FSO.FolderExists(RecoveryPath) Then
         FSO.CreateFolder Path:=RecoveryPath
@@ -339,7 +339,7 @@ Public Sub ExportCodeToBackupSubdirectory(Component As Variant, SourcePath As St
     Dim ComponentUniqId As String
     Dim ComponentFileName As String
     
-    Let ComponentUniqId = FORMAT(Now, "YYYYmmddHHnnss")
+    Let ComponentUniqId = Format(Now, "YYYYmmddHHnnss")
     Let ComponentFileName = Component.Name & "-" & ComponentUniqId & "." & ExImSourceFileExtension(Component)
     
     ExportCodeToSource Component:=Component, _
@@ -643,7 +643,7 @@ Public Sub DiffCode(Optional ByVal Repo As String)
     If Len(Repo) = 0 Then Let Repo = CommonRepository
         
     If Len(Repo) > 0 Then
-        Let RecoveryUniqId = FORMAT(Now, "YYYYmmddHHmmss")
+        Let RecoveryUniqId = Format(Now, "YYYYmmddHHmmss")
         Let RecoveryPath = Repo & "\" & ExImSubDirectory
         If Not FSO.FolderExists(RecoveryPath) Then
             FSO.CreateFolder Path:=RecoveryPath
