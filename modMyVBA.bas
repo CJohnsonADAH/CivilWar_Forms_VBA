@@ -369,7 +369,7 @@ Public Function camelCaseSplitString(ByVal s As String) As Collection
     
     Dim cWords As New Collection
     Dim c0 As String, c As String, c2 As String
-    Dim i0 As Integer, I As Integer
+    Dim I0 As Integer, I As Integer
     Dim Anchor As Integer
     Dim State As Integer
     

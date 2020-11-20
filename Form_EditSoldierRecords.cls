@@ -14,6 +14,15 @@ Private iPreviousRecord As Long
 Private sPreviousName As String
 Private sPreviousUnit As String
 Private bPreviouslyFlagged As Boolean
+Private bHighlightNames As Boolean
+    
+Private Property Get HighlightNames() As Boolean
+    Let HighlightNames = bHighlightNames
+End Property
+
+Private Property Let HighlightNames(RHS As Boolean)
+    Let bHighlightNames = RHS
+End Property
 
 Private Property Get CRLF() As String
     Let CRLF = Chr$(13) & Chr$(10)
@@ -148,8 +157,47 @@ Private Sub cmdJoinEm_Click()
     DoProcessREMARKS_Field
 End Sub
 
+Private Sub cmdLinkPossiblyDuplicates_Click()
+    Dim aAliases() As String
+    Dim dAliases As New Dictionary
+    Dim sAliasRecNumber As String
+    Dim I As Long
+    Dim I0 As Long
+    Dim N As Long
+    Dim sId As String
+    
+    Let sAliasRecNumber = Nz(Me!alias_recnumber.Value)
+    Let aAliases = RegexSplit(Text:=sAliasRecNumber, Pattern:="\s*;\s*")
+    
+    Let I0 = LBound(aAliases)
+    Let N = UBound(aAliases)
+    For I = I0 To N
+        Let sId = Trim(aAliases(I))
+        If Len(sId) > 0 Then
+            dAliases.Item(sId) = sId
+        End If
+    Next I
+    
+    dAliases.Item(Trim(Me!recnumber.Value)) = Trim(Me!recnumber.Value)
+    dAliases.Item(Trim(Me!txtPossiblyDuplicatesId2.Value)) = Trim(Me!txtPossiblyDuplicatesId2.Value)
+    
+    Dim SortedKeys() As Variant
+    
+    Let SortedKeys = dAliases.Keys
+    BubbleSortList SortedKeys
+    
+    Let Me!alias_recnumber.Value = Join("; ", SortedKeys)
+    
+    Set dAliases = Nothing
+    
+End Sub
+
 Private Sub cmdNextRecord_Click()
     DoCmd.GoToRecord Record:=acNext
+End Sub
+
+Private Sub cmdPrevRecord_Click()
+    DoCmd.GoToRecord Record:=acPrevious
 End Sub
 
 Private Sub cmdRemarksToEngage_Click()
@@ -322,6 +370,7 @@ End Sub
 
 Private Sub Form_AfterUpdate()
     DoResetHighlightedFields
+    DoResetUtilityFields
 End Sub
 
 Private Sub Form_BeforeUpdate(Cancel As Integer)
@@ -372,17 +421,12 @@ PauseForASec:
     
 End Sub
 
-Private Sub Form_Current()
+Private Sub DoCheckForPossibleDuplicates()
     Dim sCurName As String
     Dim sPrevSlug As String
     Dim sCurSlug As String
     Dim sCurUnit As String
-    
-    Dim bHighlightNames As Boolean
-    
-    Let Me!txtRemarksCandidates.Value = Null
-    Let Me!txtRemarksCandidatesNo.Value = Null
-
+        
     Let sCurName = Me!FNAME.Value & " " & Me!MI.Value & " " & Me!LNAME.Value
     Let sCurUnit = Me!BRANCH.Value & " " & Me!REGUNIT.Value & " Co. " & Me!COMUNIT.Value & " (" & Me!COMUNITNA.Value & ")"
     
@@ -390,21 +434,28 @@ Private Sub Form_Current()
     Let sCurSlug = RegexReplace(Pattern:="[^a-z0-9]+", Value:=sCurSlug, Replace:="-")
     Let sPrevSlug = RegexReplace(Pattern:="(^[^a-z0-9]+|[^a-z0-9]+$)", Value:=LCase(Trim(PreviousName)), Replace:="")
     Let sPrevSlug = RegexReplace(Pattern:="[^a-z0-9]+", Value:=sPrevSlug, Replace:="-")
-    
+
     Dim TestHighlight As Boolean
     
     Let TestHighlight = False
     Debug.Print "Previous Name:", PreviousName & " (" & sPrevSlug & ")", "Current Name:", sCurName & " (" & sCurSlug & ")"
     
+    Let Me!txtPossiblyDuplicatesName.Height = 0
+    Let Me!txtPossiblyDuplicatesName2.Height = 0
+    Let Me!txtPossiblyDuplicatesName.Value = Null
+    Let Me!txtPossiblyDuplicatesName2.Value = Null
+    
     If TestHighlight Or ((sPrevSlug = sCurSlug) And (PreviousRecord <> Me!recnumber.Value)) Then
-        Let bHighlightNames = True
-        If Not PreviouslyFlagged Or (Len(Nz(Me!alias_recnumber.Value)) = 0) Then
-            Dim iResponse As Long
-            Let iResponse = MsgBox("Possible duplicate record:" & CRLF & PreviousName & CRLF & sCurName & CRLF & PreviousUnit & CRLF & sCurUnit & CRLF & "Fill in alias?", Buttons:=vbYesNo)
-            If (iResponse = vbYes) Then
-                Let Me!alias_recnumber.Value = VBA.Format$(PreviousRecord, "0")
-            End If
-        End If
+        Let HighlightNames = True
+        
+        Let Me!txtPossiblyDuplicatesName.Height = 400
+        Let Me!txtPossiblyDuplicatesName2.Height = 400
+        Let Me!txtPossiblyDuplicatesName.Value = sCurName
+        Let Me!txtPossiblyDuplicatesUnitCo.Value = sCurUnit
+        Let Me!txtPossiblyDuplicatesName2.Value = PreviousName
+        Let Me!txtPossiblyDuplicatesUnitCo2.Value = PreviousUnit
+        Let Me!txtPossiblyDuplicatesId2.Value = PreviousRecord
+
         Let PreviouslyFlagged = True
     
     Else
@@ -414,6 +465,16 @@ Private Sub Form_Current()
     Let PreviousName = sCurName
     Let PreviousUnit = sCurUnit
     Let PreviousRecord = Nz(Me!recnumber.Value)
+
+End Sub
+
+Private Sub Form_Current()
+    Let HighlightNames = False
+    
+    Let Me!txtRemarksCandidates.Value = Null
+    Let Me!txtRemarksCandidatesNo.Value = Null
+
+    DoCheckForPossibleDuplicates
     
     Let Me!RevisedTimestamp.Locked = True
     Let Me!RevisedBy.Locked = True
@@ -432,14 +493,25 @@ Private Sub Form_Current()
         End If
     End If
     
-    If bHighlightNames Then
+    If HighlightNames Then
         HighlightField Field:=Me!FNAME
         HighlightField Field:=Me!LNAME
         HighlightField Field:=Me!MI
         HighlightField Field:=Me!alias_recnumber
+    
+        HighlightField Field:=Me!txtPossiblyDuplicatesName
+        HighlightField Field:=Me!txtPossiblyDuplicatesName2
+        HighlightField Field:=Me!txtPossiblyDuplicatesUnitCo
+        HighlightField Field:=Me!txtPossiblyDuplicatesUnitCo2
+        HighlightField Field:=Me!txtPossiblyDuplicatesId2
+    
     End If
 End Sub
 
+
+Private Sub Form_Undo(Cancel As Integer)
+    DoResetUtilityFields
+End Sub
 
 Private Sub Label30_DblClick(Cancel As Integer)
     Let Me.Filter = "Len(Nz([ENGAGE2])) > 0"
@@ -700,6 +772,11 @@ Private Sub DoFillInSlug()
         DoElaborateAlphanumSlug
     End If
     
+End Sub
+
+Private Sub DoResetUtilityFields()
+    Let Me!txtRemarksCandidates.Value = Null
+    Let Me!txtRemarksCandidatesNo.Value = Null
 End Sub
 
 Private Sub DoResetHighlightedFields()

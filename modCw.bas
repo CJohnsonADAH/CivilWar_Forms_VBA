@@ -177,6 +177,7 @@ Sub DoFilterREMARKSField(ByRef Field As Variant)
     If Not IsNull(Field.Value) Then
         Let Field.Value = RegexReplace(Value:=Field.Value, Pattern:="^(P[.]?O[.]?|Post\s+Office|Residence|Res[.]?)(\s+|\s*[-;,]\s*)([A-Z])", Replace:="$1: $3")
         Let Field.Value = RegexReplace(Value:=Field.Value, Pattern:="^\s*[(]Remarks(\s*begin)?[)]\s*", Replace:="")
+        Let Field.Value = RegexReplace(Value:=Field.Value, Pattern:="\bHospital\s*Record[^A-Z]*\s{5,}", Replace:="Hospital Record: ")
         Let Field.Value = RegexReplace(Value:=Field.Value, Pattern:="\s{7,}", Replace:=CRLF & CRLF)
     End If
 End Sub
